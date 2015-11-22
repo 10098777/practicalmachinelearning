@@ -1,0 +1,82 @@
+---
+title: "Practical Machine Learning"
+author: "Li Hui"
+date: "Monday, November 23, 2015"
+output: html_document
+---
+Summary: This data analysis is to predict the activity clasuse the lifting activity dataset 
+```{r}
+library(knitr)
+setwd("E:/statistics/coursera/repository/practicalmachinelearning/project")
+#The dataset has already been downloaded from the following website:"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", therefore I directly read it in.
+training<-read.csv("pml-training.csv")
+```
+
+## look at the summary of the dataset, but do not show the the summary because it is too much and detailed.
+```{r,results='hide'}
+str(training)
+```
+The summary shows that there are a lot of NA values in the dataset. Therefore, the dataset will be preprocessed at first.
+
+## If a column has 10% NA values, it will be depleted from the training dataset.
+```{r, echo=TRUE,cache=TRUE}
+ncol<-ncol(training)
+nrow<-nrow(training)
+index1<-numeric(length=ncol)
+index2<-numeric(length=ncol)
+for(i in 1:ncol){
+    index1[i]<-0
+    index2[i]<-0
+    for(m in 1:nrow){
+        if(is.na(training[m,i])){index1[i]<-index1[i]+1}
+    }
+}
+for(n in 1:ncol){
+    if(index1[n]>nrow*0.1){
+     index2[n]<-n   
+    }
+}
+index3<-index2[index2!=0]
+processedtraining<-training[,-index3]
+```
+
+##Deplete the variables with little variance and the first index variable, the user variable and the time factor variable which are certainly not useful for prediction.
+```{r,cache=TRUE}
+library(caret)
+nsv<-nearZeroVar(processedtraining,saveMetrics=TRUE)
+nsvrow<-nrow(nsv)
+index4<-numeric(length=nsvrow)
+for(i in 1:nsvrow){
+    if(nsv[i,4]){index4[i]<-i}
+    else{index4[i]<-0}
+}
+index5<-index4[index4!=0]
+processedtraining2<-processedtraining[,-c(1,2,5,index5)]
+```
+
+##Delete variables that is highly correlated
+```{r}
+M<-abs(cor(processedtraining2[,-56]))
+diag(M)<-0
+which(M>0.8,arr.ind=T)
+processedtraining3<-processedtraining2[,-c(6,7,10,11,12,13,18,23,25,32,34,44,36,49)]
+```
+
+##Create training and testing dataset
+```{r}
+library(caret)
+#My computer is limited while the dataset is a little large.Therefore I subset the rows from the processedtraining3 data.
+subset<-sample(1:nrow(processedtraining3),0.05*nrow(processedtraining3),replace=FALSE)
+training4<-processedtraining3[subset,]
+set.seed(125)
+inTrain<-createDataPartition(y=training4$classe,p=0.6,list=FALSE)
+subsettrain<-training4[inTrain,]
+subsettest<-training4[-inTrain,]
+```
+
+## Fit a model
+```{r}
+modelFit<-train(classe~.,data=subsettrain,method="rf",prox=TRUE)
+confusionMatrix(predict(modelFit,subsettest),subsettest$classe)
+```
+The estimated out of sample error of this model is 0.9309.
